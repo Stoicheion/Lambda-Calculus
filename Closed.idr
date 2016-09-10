@@ -19,7 +19,7 @@ false = Lam (Lam (Ref (FS FZ)))
 U : Closed
 U = Lam (App (Ref FZ) (Ref FZ))
 
---Decrease the number in the type of these two terms and it will fail to compile.
+--Decrease the number in the type of these three terms and it will fail to compile.
 open0 : Close 1
 open0 = Ref FZ
 open1 : Close 1
