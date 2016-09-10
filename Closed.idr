@@ -2,13 +2,10 @@ module Closed
 
 import Data.Fin
 
-mutual
-  data Open :  Nat -> Type where
-    Ref : Fin maxBV -> Open maxBV
-    More : Close maxBV -> Open maxBV
-  data Close : Nat -> Type where
-    Lam : Open (S maxBV) -> Close maxBV
-    App : Open maxBV -> Open maxBV -> Close maxBV
+data Close : Nat -> Type where
+  Ref : Fin maxBV -> Close maxBV
+  Lam : Close (S maxBV) -> Close maxBV
+  App : Close maxBV -> Close maxBV -> Close maxBV
 
 Closed : Type
 Closed = Close 0
@@ -16,13 +13,15 @@ Closed = Close 0
 id : Closed
 id = Lam (Ref FZ)
 true : Closed
-true = Lam (More (Lam (Ref FZ)))
+true = Lam (Lam (Ref FZ))
 false : Closed
-false = Lam (More (Lam (Ref (FS FZ))))
+false = Lam (Lam (Ref (FS FZ)))
 U : Closed
-U = Lam (More (App (Ref FZ) (Ref FZ)))
+U = Lam (App (Ref FZ) (Ref FZ))
 
 --Decrease the number in the type of these two terms and it will fail to compile.
+open0 : Close 1
+open0 = Ref FZ
 open1 : Close 1
 open1 = Lam (Ref (FS FZ))
 open2 : Close 2
