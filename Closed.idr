@@ -8,7 +8,7 @@ mutual
     More : Close maxBV -> Open maxBV
   data Close : Nat -> Type where
     Lam : Open (S maxBV) -> Close maxBV
-    App : Close maxBV -> Close maxBV -> Close maxBV
+    App : Open maxBV -> Open maxBV -> Close maxBV
 
 Closed : Type
 Closed = Close 0
@@ -19,6 +19,8 @@ true : Closed
 true = Lam (More (Lam (Ref FZ)))
 false : Closed
 false = Lam (More (Lam (Ref (FS FZ))))
+U : Closed
+U = Lam (More (App (Ref FZ) (Ref FZ)))
 
 --Decrease the number in the type of these two terms and it will fail to compile.
 open1 : Close 1
