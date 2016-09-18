@@ -3,37 +3,40 @@ module Lambda
 
 import public Data.Fin
 
+||| A family of nameless representations of lambda calculus terms using De Bruijn levels.
 public export
 data Term : {default 0 abs : Nat} -> Type where
-  {- A variable that by default can only refer to an enclosing lambda abstraction
-     (unless "abs" is greater than the number of lambda abstractions enclosing the
-     variable). These are De Bruijn levels. -}
+  ||| A variable that by default can only refer to an enclosing lambda abstraction
+  ||| (unless "abs" is greater than the number of lambda abstractions enclosing the
+  ||| variable). These are De Bruijn levels.
   Ref : Fin maxBV -> Term {abs = maxBV}
-  -- A lambda abstraction whose embedded term has 1 more maximum uniquely bound variables.
+  ||| A lambda abstraction whose embedded term has 1 more maximum uniquely bound variables.
   Lam : Term {abs = S maxBV} -> Term {abs = maxBV}
   App : Term {abs = maxBV} -> Term {abs = maxBV} -> Term {abs = maxBV}
 
 %name Term t, u, s, p, q, r
 %name Fin  n, m, k
 
--- A Term having "abs = 0" ensures that there are no dangling references embedded within.
+||| A Term having "abs = 0" ensures that there are no dangling references embedded within.
 public export
 Closed : Type
 Closed = Term {abs = 0}
 
-{- A Term having "abs = S _" ensures that the *maximum* number of dangling unique references
-   embedded within is greater than 0. There need not be any dangling references, however. -}
+||| A Term having "abs = S _" ensures that the *maximum* number of dangling unique references
+||| embedded within is greater than 0. There need not be any dangling references, however.
 public export
 Open : {default 1 abs : Nat} -> Type
 Open {abs = n@(S _)} = Term {abs = n}
 Open {abs = Z} = Void
 
+||| Show lambda abstractions without their binding number.
 public export
 showBasic : Term {abs = n} -> String
 showBasic (Ref n) = show (finToNat n)
 showBasic (Lam t) = "(λ. " ++ showBasic t ++ ")"
 showBasic (App t u) = "(" ++ showBasic t ++ " " ++ showBasic u ++ ")"
 
+||| Show lambda abstractions with their binding number.
 public export
 showBinders : Term {abs = n} -> String
 showBinders (Ref n) = show (finToNat n)
