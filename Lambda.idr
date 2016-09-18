@@ -50,6 +50,21 @@ implementation Show (Term {abs = n}) where
     show = showBinders
 
 public export
+isRef : Term {abs = n} -> Bool
+isRef (Ref _) = True
+isRef _ = False
+
+public export
+isLam : Term {abs = n} -> Bool
+isLam (Lam _) = True
+isLam _ = False
+
+public export
+isApp : Term {abs = n} -> Bool
+isApp (App _ _) = True
+isApp _ = False
+
+public export
 open : (p: Nat) -> Term {abs = q} -> Term {abs = p + q}
 open n {q}(Ref m) = Ref $ rewrite plusCommutative n q in weakenN n m
 open n {q}(Lam t) = Lam $ rewrite plusSuccRightSucc n q in open n t
