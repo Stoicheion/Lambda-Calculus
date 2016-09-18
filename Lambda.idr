@@ -5,20 +5,27 @@ import public Data.Fin
 
 public export
 data Term : {default 0 abs : Nat} -> Type where
+  {- A variable that by default can only refer to an enclosing lambda abstraction
+     (unless "abs" is greater than the number of lambda abstractions enclosing the
+     variable). These are De Bruijn levels. -}
   Ref : Fin maxBV -> Term {abs = maxBV}
+  -- A lambda abstraction whose embedded term has 1 more maximum uniquely bound variables.
   Lam : Term {abs = S maxBV} -> Term {abs = maxBV}
   App : Term {abs = maxBV} -> Term {abs = maxBV} -> Term {abs = maxBV}
 
 %name Term t, u, s, p, q, r
 %name Fin  n, m, k
 
+-- A Term having "abs = 0" ensures that there are no dangling references embedded within.
 public export
 Closed : Type
 Closed = Term {abs = 0}
 
+{- A Term having "abs = S _" ensures that the *maximum* number of dangling unique references
+   embedded within is greater than 0. There need not be any dangling references, however. -}
 public export
 Open : {default 1 abs : Nat} -> Type
-Open {abs = S m} = Term {abs = S m}
+Open {abs = n@(S _)} = Term {abs = n}
 Open {abs = Z} = Void
 
 public export
@@ -48,7 +55,7 @@ shift1 : Term {abs = p} -> Term {abs = S p}
 shift1 = shift 1
 
 public export
-substituteAndShift : Term {abs = S p} -> Term {abs = p} -> Term {abs = p}
+substituteAndShift : Open {abs = S p} -> Term {abs = p} -> Term {abs = p}
 substituteAndShift (App t u) s = (App (substituteAndShift t s) (substituteAndShift u s))
 substituteAndShift (Lam t) s = Lam (substituteAndShift t (shift1 s))
 substituteAndShift (Ref (FS n)) _ = (Ref (n)) --shift
@@ -60,6 +67,7 @@ eval1ByValue (App (Lam t) s@(Lam _)) = substituteAndShift t s
 eval1ByValue (App t@(Lam _) u@(App _ _)) = App t (eval1ByValue u)
 eval1ByValue (App t@(App _ _) u) = App (eval1ByValue t) u
 eval1ByValue t = t
+
 
 exampleClosed0 : Closed
 exampleClosed0 = Lam (Ref FZ)
