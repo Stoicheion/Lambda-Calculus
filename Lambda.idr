@@ -29,10 +29,20 @@ Open {abs = n@(S _)} = Term {abs = n}
 Open {abs = Z} = Void
 
 public export
+showBasic : Term {abs = n} -> String
+showBasic (Ref n) = show (finToNat n)
+showBasic (Lam t) = "(λ. " ++ showBasic t ++ ")"
+showBasic (App t u) = "(" ++ showBasic t ++ " " ++ showBasic u ++ ")"
+
+public export
+showBinders : Term {abs = n} -> String
+showBinders (Ref n) = show (finToNat n)
+showBinders {n}(Lam t) = "(λ" ++ show n ++ ". " ++ showBinders t ++ ")"
+showBinders (App t u) = "(" ++ showBinders t ++ " " ++ showBinders u ++ ")"
+
+public export
 implementation Show (Term {abs = n}) where
-    show (Ref n) = show (finToNat n)
-    show (Lam t) = "(λ. " ++ show t ++ ")"
-    show (App t u) = "(" ++ show t ++ " " ++ show u ++ ")"
+    show = showBinders
 
 public export
 open : (p: Nat) -> Term {abs = q} -> Term {abs = p + q}
