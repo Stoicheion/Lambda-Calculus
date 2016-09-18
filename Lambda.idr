@@ -3,6 +3,8 @@ module Lambda
 
 import public Data.Fin
 
+%default total
+
 ||| A family of nameless representations of lambda calculus terms using De Bruijn levels.
 public export
 data Term : {default 0 abs : Nat} -> Type where
@@ -80,6 +82,20 @@ eval1ByValue (App (Lam t) s@(Lam _)) = substituteAndShift t s
 eval1ByValue (App t@(Lam _) u@(App _ _)) = App t (eval1ByValue u)
 eval1ByValue (App t@(App _ _) u) = App (eval1ByValue t) u
 eval1ByValue t = t
+
+public export
+data Evaluation a = Reduction a | Termination
+
+public export
+reduce1ByValue : Term {abs = n} -> Evaluation $ Term {abs = n}
+reduce1ByValue t@(App (Lam _) (Lam _)) = Reduction $ eval1ByValue t
+reduce1ByValue (App (Lam t) u@(App _ _)) = case (reduce1ByValue u) of
+                                            (Reduction u') => Reduction $ App (Lam t) u'
+                                            Termination => Termination
+reduce1ByValue (App t@(App _ _) u) = case (reduce1ByValue t) of
+                                      (Reduction t') => Reduction $ App t' u
+                                      Termination => Termination
+reduce1ByValue _ = Termination
 
 
 exampleClosed0 : Closed
