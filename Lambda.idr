@@ -97,14 +97,6 @@ substituteAndShift (Ref (FS n)) _ = Ref n --shift
 substituteAndShift (Lam t) s = Lam $ substituteAndShift t $ shift1 s
 substituteAndShift (App t u) s = App (substituteAndShift t s) (substituteAndShift u s)
 
-||| One-step call-by-value evaluation where a "value" is a lambda abstraction.
-public export
-eval1ByValue : Term n -> Term n
-eval1ByValue (App (Lam t) s@(Lam _)) = substituteAndShift t s
-eval1ByValue (App t@(Lam _) u@(App _ _)) = App t (eval1ByValue u)
-eval1ByValue (App t@(App _ _) u) = App (eval1ByValue t) u
-eval1ByValue t = t
-
 ||| Where "normal form" means no evaluation rules applies.
 public export
 data NormalForm = Value | Stuck
@@ -116,25 +108,32 @@ data Evaluation a = Reduction a | Termination NormalForm
 ||| One-step call-by-value evaluation where the result specifies if termination was achieved.
 public export
 reduce1ByValue : Term n -> Evaluation $ Term n
-reduce1ByValue t@(App (Lam _) (Lam _)) = Reduction $ eval1ByValue t
-reduce1ByValue (App (Lam t) u@(App _ _)) = case (reduce1ByValue u) of
-                                            (Reduction u') => Reduction $ App (Lam t) u'
+reduce1ByValue (App (Lam t) s@(Lam _)) = Reduction $ substituteAndShift t s
+reduce1ByValue (App (Lam t) u@(App _ _)) = case (reduce1ByValue u) of --as-patterns are broken, so workaround is used.
+                                            Reduction u' => Reduction $ App (Lam t) u'
                                             Termination nf => Termination nf
 reduce1ByValue (App t@(App _ _) u) = case (reduce1ByValue t) of
-                                      (Reduction t') => Reduction $ App t' u
+                                      Reduction t' => Reduction $ App t' u
                                       Termination nf => Termination nf
 reduce1ByValue t = Termination $ if isVal t then Value else Stuck
+
+||| One-step call-by-value evaluation where a "value" is a lambda abstraction.
+public export
+eval1ByValue : Term n -> Term n
+eval1ByValue t = case reduce1ByValue t of
+                      Reduction t' => t'
+                      _ => t
 
 ||| Where "normal" means no evaluation rule applies.
 isNormal : Term n -> Bool
 isNormal t = case reduce1ByValue t of
-                  (Termination _) => True
+                  Termination _ => True
                   _ => False
 
 ||| Where "stuck" means no evaluation rule applies and "t" is not a "value".
 isStuck : Term n -> Bool
 isStuck t = case reduce1ByValue t of
-                 (Termination Stuck) => True
+                 Termination Stuck => True
                  _ => False
 
 
