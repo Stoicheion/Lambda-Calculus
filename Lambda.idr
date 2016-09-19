@@ -64,6 +64,12 @@ isApp : Term n -> Bool
 isApp (App _ _) = True
 isApp _ = False
 
+||| Determines if a Term is a "value".
+public export
+isVal : Term n -> Bool
+isVal (Lam _) = True
+isVal _ = False
+
 public export
 open : (p: Nat) -> Term q -> Term $ p + q
 open n {q}(Ref m) = Ref $ rewrite plusCommutative n q in weakenN n m
@@ -99,8 +105,13 @@ eval1ByValue (App t@(Lam _) u@(App _ _)) = App t (eval1ByValue u)
 eval1ByValue (App t@(App _ _) u) = App (eval1ByValue t) u
 eval1ByValue t = t
 
+||| Where "normal form" means no evaluation rules applies.
 public export
-data Evaluation a = Reduction a | Termination
+data NormalForm = Value | Stuck
+
+||| The result of evaluating a term is either another term or revealing no evaluation rule applies.
+public export
+data Evaluation a = Reduction a | Termination NormalForm
 
 ||| One-step call-by-value evaluation where the result specifies if termination was achieved.
 public export
@@ -108,11 +119,23 @@ reduce1ByValue : Term n -> Evaluation $ Term n
 reduce1ByValue t@(App (Lam _) (Lam _)) = Reduction $ eval1ByValue t
 reduce1ByValue (App (Lam t) u@(App _ _)) = case (reduce1ByValue u) of
                                             (Reduction u') => Reduction $ App (Lam t) u'
-                                            Termination => Termination
+                                            Termination nf => Termination nf
 reduce1ByValue (App t@(App _ _) u) = case (reduce1ByValue t) of
                                       (Reduction t') => Reduction $ App t' u
-                                      Termination => Termination
-reduce1ByValue _ = Termination
+                                      Termination nf => Termination nf
+reduce1ByValue t = Termination $ if isVal t then Value else Stuck
+
+||| Where "normal" means no evaluation rule applies.
+isNormal : Term n -> Bool
+isNormal t = case reduce1ByValue t of
+                  (Termination _) => True
+                  _ => False
+
+||| Where "stuck" means no evaluation rule applies and "t" is not a "value".
+isStuck : Term n -> Bool
+isStuck t = case reduce1ByValue t of
+                 (Termination Stuck) => True
+                 _ => False
 
 
 exampleClosed0 : Closed
