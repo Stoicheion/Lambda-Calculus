@@ -1,9 +1,9 @@
 module Lambda
 
 
+import public Calculus
 import public Data.Fin
 
-%default total
 
 ||| A family of nameless representations of lambda calculus terms using De Bruijn levels.
 public export
@@ -97,14 +97,6 @@ substituteAndShift (Ref (FS n)) _ = Ref n --shift
 substituteAndShift (Lam t) s = Lam $ substituteAndShift t $ shift1 s
 substituteAndShift (App t u) s = App (substituteAndShift t s) (substituteAndShift u s)
 
-||| Where "normal form" means no evaluation rules applies.
-public export
-data NormalForm = Value | Stuck
-
-||| The result of evaluating a term is either another term or revealing no evaluation rule applies.
-public export
-data Evaluation a = Reduction a | Termination NormalForm
-
 ||| One-step call-by-value evaluation where the result specifies if termination was achieved.
 public export
 reduce1ByValue : Term n -> Evaluation $ Term n
@@ -117,25 +109,10 @@ reduce1ByValue (App t@(App _ _) u) = case (reduce1ByValue t) of
                                       Termination nf => Termination nf
 reduce1ByValue t = Termination $ if isVal t then Value else Stuck
 
-||| One-step call-by-value evaluation where a "value" is a lambda abstraction.
 public export
-eval1ByValue : Term n -> Term n
-eval1ByValue t = case reduce1ByValue t of
-                      Reduction t' => t'
-                      _ => t
-
-||| Where "normal" means no evaluation rule applies.
-isNormal : Term n -> Bool
-isNormal t = case reduce1ByValue t of
-                  Termination _ => True
-                  _ => False
-
-||| Where "stuck" means no evaluation rule applies and "t" is not a "value".
-isStuck : Term n -> Bool
-isStuck t = case reduce1ByValue t of
-                 Termination Stuck => True
-                 _ => False
-
+implementation Calculus (Term n) where
+    reduce1 = reduce1ByValue
+    isVal = Lambda.isVal
 
 exampleClosed0 : Closed
 exampleClosed0 = Lam $ Ref FZ
