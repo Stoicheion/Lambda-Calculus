@@ -40,10 +40,12 @@ showBasic (App t u) = "(" ++ showBasic t ++ " " ++ showBasic u ++ ")"
 
 ||| Show lambda abstractions with their binding number.
 public export
-showBinders : Term n -> String
-showBinders (Ref n) = show $ finToNat n
-showBinders {n}(Lam t) = "(λ" ++ show n ++ ". " ++ showBinders t ++ ")"
-showBinders (App t u) = "(" ++ showBinders t ++ " " ++ showBinders u ++ ")"
+showBinders : Term p -> String
+showBinders {p} t = showBinders' t p where
+    showBinders' : Term q -> Nat -> String
+    showBinders' (Ref n) offset = show $ finToNat n
+    showBinders' {q} (Lam t) offset = "(λ" ++ show (minus q offset) ++ ". " ++ showBinders' t offset ++ ")"
+    showBinders' (App t u) offset = "(" ++ showBinders' t offset ++ " " ++ showBinders' u offset ++ ")"
 
 public export
 implementation Show (Term n) where
@@ -72,8 +74,8 @@ isVal _ = False
 
 public export
 open : (p: Nat) -> Term q -> Term $ p + q
-open n {q}(Ref m) = Ref $ rewrite plusCommutative n q in weakenN n m
-open n {q}(Lam t) = Lam $ rewrite plusSuccRightSucc n q in open n t
+open {q} n (Ref m) = Ref $ rewrite plusCommutative n q in weakenN n m
+open {q} n (Lam t) = Lam $ rewrite plusSuccRightSucc n q in open n t
 open n (App t u) = App (open n t) (open n u)
 
 public export
@@ -83,7 +85,7 @@ open1 = open 1
 public export
 shift : (p : Nat) -> Term q -> Term $ p + q
 shift n (Ref m) = Ref $ shift n m
-shift n {q}(Lam t) = Lam $ rewrite plusSuccRightSucc n q in shift n t
+shift {q} n (Lam t) = Lam $ rewrite plusSuccRightSucc n q in shift n t
 shift n (App t u) = App (shift n t) (shift n u)
 
 public export
