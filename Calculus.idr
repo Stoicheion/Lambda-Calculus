@@ -1,5 +1,8 @@
 module Calculus
 
+%access export
+
+
 ||| Where "normal form" means no evaluation rules applies.
 public export
 data NormalForm = Value | Stuck
@@ -36,8 +39,8 @@ interface Calculus a where
   ||| Where "stuck" means no evaluation rule applies and "t" is not a "value".
   isStuck : a -> Bool
   isStuck t = case reduce1 t of
-              Termination Stuck => True
-              _ => False
+                   Termination Stuck => True
+                   _ => False
 
   partial
   stepByStep : Show a => a -> IO ()

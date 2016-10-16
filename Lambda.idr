@@ -1,129 +1,167 @@
 module Lambda
 
-
-import public Calculus
+import Data.Vect
+import Lemmas
 import public Data.Fin
+import public Calculus
+
+%default total
+%access export
 
 
-||| A family of nameless representations of lambda calculus terms using De Bruijn levels.
+||| The base cases of Term used to end the recursion.
 public export
-data Term : Nat -> Type where
-  ||| A variable that by default can only refer to an enclosing lambda abstraction
-  ||| (unless "abs" is greater than the number of lambda abstractions enclosing the
-  ||| variable). These are De Bruijn levels.
-  Ref : Fin maxBV -> Term maxBV
-  ||| A lambda abstraction whose embedded term has 1 more maximum uniquely bound variables.
-  Lam : Term $ S maxBV -> Term maxBV
-  App : Term maxBV -> Term maxBV -> Term maxBV
+data BaseTerm : Type -> (ctxt : Nat) -> Type where
+  ||| A abstract (free) variable which doesn't depend on the context for
+  ||| interpretation. Could be anything from meta variables/placeholders
+  ||| in an incomplete program to even constants. Use "Void" as the type
+  ||| to only allow construction of closed terms.
+  Free : a -> BaseTerm a ctxt
+  ||| A normally bound variable (reference to some binder) which can be
+  ||| dangling (free) if context allows.
+  Ref : Fin ctxt -> BaseTerm a ctxt
 
+||| A abstract representation of lambda calculus terms. Intended usage
+||| involves using a string type for "id" if named terms are desired
+||| or "()" (Unit) if nameless terms are wanted.
+public export
+data Term : Type -> Type -> (ctxt : Nat) -> Type where
+  ||| A leaf node (usually containing bound variables) which contains data
+  ||| which may depend on the context for correct interpretation.
+  Leaf : BaseTerm fr ctxt -> Term id fr ctxt
+  ||| A lambda abstraction containing a term with the same context + 1 more binder
+  ||| in context.
+  Lam : id -> Term id fr $ S ctxt -> Term id fr ctxt
+  App : Term id fr ctxt -> Term id fr ctxt -> Term id fr ctxt
+
+%name BaseTerm x, y, z
 %name Term t, u, s, p, q, r
-%name Fin  n, m, k
+%name Fin n, m, i, j, k
 
-||| A Term having "abs = 0" ensures that there are no dangling references embedded within.
+||| A Term having "ctxt" = 0 ensures that there are no dangling references embedded within.
 public export
-Closed : Type
-Closed = Term 0
+ClosedBound : Type -> Type -> Type
+ClosedBound id = flip (Term id) 0
 
-||| A Term having "abs = S _" ensures that the *maximum* number of dangling unique references
+||| A Term having "ctxt" = S _ ensures that the *maximum* number of dangling unique references
 ||| embedded within is greater than 0. There need not be any dangling references, however.
 public export
-Open : Nat -> Type
-Open n@(S _) = Term n
-Open Z = Void
+OpenBound : Type -> Type -> Nat -> Type
+OpenBound id fr p@(S _) = Term id fr p
+OpenBound _ _ Z = Void
 
-||| Show lambda abstractions without their binding number.
-public export
-showBasic : Term n -> String
-showBasic (Ref n) = show $ finToNat n
-showBasic (Lam t) = "(λ. " ++ showBasic t ++ ")"
-showBasic (App t u) = "(" ++ showBasic t ++ " " ++ showBasic u ++ ")"
-
-||| Show lambda abstractions with their binding number.
-public export
-showBinders : Term p -> String
-showBinders {p} t = showBinders' t p where
-    showBinders' : Term q -> Nat -> String
-    showBinders' (Ref n) offset = show $ finToNat n
-    showBinders' {q} (Lam t) offset = "(λ" ++ show (minus q offset) ++ ". " ++ showBinders' t offset ++ ")"
-    showBinders' (App t u) offset = "(" ++ showBinders' t offset ++ " " ++ showBinders' u offset ++ ")"
+hasFree : Term id fr p -> Bool
+hasFree (Leaf (Free _)) = True
+hasFree (Leaf _) = False
+hasFree (Lam _ t) = hasFree t
+hasFree (App t u) = hasFree t || hasFree u
 
 public export
-implementation Show (Term n) where
-    show = showBinders
+data HasFree : Term id fr p -> Type where
+  FreeHasFree : HasFree $ Leaf $ Free _
+  LamHasFree : HasFree t -> HasFree $ Lam _ t
+  AppHasFree : Either (HasFree t) (HasFree u) -> HasFree $ App t u
 
-public export
-isRef : Term n -> Bool
+showImplicit : Show fr => BaseTerm fr ctxt -> String
+showImplicit (Free x) = "(Free " ++ show x ++ ")"
+showImplicit (Ref n) = show $ finToNat n
+
+implementation Show fr => Show (BaseTerm fr ctxt) where
+  show = showImplicit
+
+isFree : BaseTerm fr ctxt -> Bool
+isFree (Free _) = True
+isFree _ = False
+
+isRef : BaseTerm fr ctxt -> Bool
 isRef (Ref _) = True
 isRef _ = False
 
-public export
-isLam : Term n -> Bool
-isLam (Lam _) = True
+isLeaf : Term id fr p -> Bool
+isLeaf (Leaf _) = True
+isLeaf _ = False
+
+isLam : Term id fr p -> Bool
+isLam (Lam _ _) = True
 isLam _ = False
 
-public export
-isApp : Term n -> Bool
+isApp : Term id fr p -> Bool
 isApp (App _ _) = True
 isApp _ = False
 
+open : (p : Nat) -> Term id fr q -> Term id fr $ p + q
+open n   (Leaf (Ref m)) {q} = Leaf $ Ref $ rewrite plusCommutative n q in weakenN n m
+open n t@(Leaf (Free _)) = t
+open n   (Lam x t) {q} = Lam x $ rewrite plusSuccRightSucc n q in open n t
+open n   (App t u) = App (open n t) (open n u)
+
+openUntil : (p : Nat) -> Term id fr q -> Term id fr $ maximum p q
+openUntil p t {q} = rewrite diffPlusIsMax p q in open (minus p q) t
+
+matchCtxt : Term id fr p -> Term id fr q -> (Term id fr $ maximum p q, Term id fr $ maximum p q)
+matchCtxt t u {p} {q} = (rewrite maximumCommutative p q in openUntil q t, openUntil p u)
+
+free : fr -> Term id fr p
+free = Leaf . Free
+
+ref : Fin p -> Term id fr p
+ref = Leaf . Ref
+
+app : Term id fr p -> Term id fr q -> Term id fr $ maximum p q
+app t u = let (t, u) = matchCtxt t u in App t u
+
+||| If a term is an abstraction, peel off the first sequence of consecutive abstractions.
+peel : ClosedBound id fr -> (p : Nat ** (Vect p id, Term id fr p))
+peel t = peel' t [] where
+  peel' : Term id fr p -> Vect p id -> (q : Nat ** (Vect q id, Term id fr q))
+  peel' (Lam x t) xs = peel' t $ x::xs
+  peel' t xs {p} = (p ** (xs, t))
+
+||| Close over a term with as many lambda abstractions as needed to
+||| bound all dangling references.
+enclose : Vect p id -> Term id fr p -> ClosedBound id fr
+enclose [] t@(Leaf (Free x)) = t
+enclose []   (Leaf (Ref FZ)) impossible
+enclose []   (Leaf (Ref (FS _))) impossible
+enclose [] t@(Lam _ _) = t
+enclose [] t@(App _ _) = t
+enclose (x :: xs) t = enclose xs $ Lam x t
+
 ||| Determines if a Term is a "value".
-public export
-isVal : Term n -> Bool
-isVal (Lam _) = True
-isVal _ = False
+isVal : Term id fr p -> Bool
+isVal = isLam
 
-public export
-open : (p: Nat) -> Term q -> Term $ p + q
-open {q} n (Ref m) = Ref $ rewrite plusCommutative n q in weakenN n m
-open {q} n (Lam t) = Lam $ rewrite plusSuccRightSucc n q in open n t
-open n (App t u) = App (open n t) (open n u)
-
-public export
-open1 : Term p -> Term $ S p
-open1 = open 1
-
-public export
-shift : (p : Nat) -> Term q -> Term $ p + q
-shift n (Ref m) = Ref $ shift n m
-shift {q} n (Lam t) = Lam $ rewrite plusSuccRightSucc n q in shift n t
-shift n (App t u) = App (shift n t) (shift n u)
-
-public export
-shift1 : Term p -> Term $ S p
-shift1 = shift 1
-
-public export
-substituteAndShift : Open $ S p -> Term p -> Term p
-substituteAndShift (Ref FZ) s = s --substitute
-substituteAndShift (Ref (FS n)) _ = Ref n --shift
-substituteAndShift (Lam t) s = Lam $ substituteAndShift t $ shift1 s
-substituteAndShift (App t u) s = App (substituteAndShift t s) (substituteAndShift u s)
+||| Substitute a term s with a "closed bound" inside a term t with an "open bound" of 1
+||| in place of an implicit variable n, which always equals the maximum bounded number
+||| and the only dangling reference in any subterm of t, resulting in a new term with a
+||| "closed bound". Unlike traditional substitution functions on lambda terms using
+||| De Bruijn indices, no shifting is needed as free variables are handled seperately
+||| from bound variables in the definition of lambda terms used here, but in order to
+||| pass type checking the bound on s must be opened.
+subst : ClosedBound id fr -> Term id fr 1 -> ClosedBound id fr
+subst s t = subst' s t where
+  subst' : Term id fr p -> Term id fr $ S p -> Term id fr p
+  subst' s t@(Leaf (Free _)) = t
+  subst' s   (Leaf (Ref m)) = case (strengthen m) of
+                                  -- m could not strengthen ≡ m = last ≡ m = the variable being substituted
+                                  (Left m) => s
+                                  -- m could     strengthen ≡ m < last ≡ m ≠ the variable being substituted
+                                  (Right m) => ref m
+  subst' s   (Lam x t) = Lam x $ subst' (open 1 s) t
+  subst' s   (App t u) = App (subst' s t) (subst' s u)
 
 ||| One-step call-by-value evaluation where the result specifies if termination was achieved.
-public export
-reduce1ByValue : Term n -> Evaluation $ Term n
-reduce1ByValue (App (Lam t) s@(Lam _)) = Reduction $ substituteAndShift t s
-reduce1ByValue (App (Lam t) u@(App _ _)) = case (reduce1ByValue u) of --as-patterns are broken, so workaround is used.
-                                            Reduction u' => Reduction $ App (Lam t) u'
-                                            Termination nf => Termination nf
+reduce1ByValue : ClosedBound id fr -> Evaluation $ ClosedBound id fr
+reduce1ByValue (App (Lam _ t) s@(Lam _ _)) = Reduction $ subst s t -- There can only be one variable to substitute for in this context so it is left implicit.
+reduce1ByValue (App t@(Lam _ _) u@(App _ _)) = case (reduce1ByValue u) of
+                                                    Reduction u' => Reduction $ App t u'
+                                                    Termination nf => Termination nf
 reduce1ByValue (App t@(App _ _) u) = case (reduce1ByValue t) of
-                                      Reduction t' => Reduction $ App t' u
-                                      Termination nf => Termination nf
+                                          Reduction t' => Reduction $ App t' u
+                                          Termination nf => Termination nf
 reduce1ByValue t = Termination $ if isVal t then Value else Stuck
 
-public export
-implementation Calculus (Term n) where
+partial
+implementation Calculus (ClosedBound id fr) where
     reduce1 = reduce1ByValue
     isVal = Lambda.isVal
-
-exampleClosed0 : Closed
-exampleClosed0 = Lam $ Ref FZ
-exampleClosed1 : Closed
-exampleClosed1 = Lam $ open1 exampleClosed0
---Decrease the number in the type of these three terms and it will fail to compile.
-exampleOpen0 : Open 1
-exampleOpen0 = Ref FZ
-exampleOpen1 : Open 1
-exampleOpen1 = Lam $ Ref $ FS FZ
-exampleOpen2 : Open 2
-exampleOpen2 = Lam $ Ref $ FS $ FS FZ
